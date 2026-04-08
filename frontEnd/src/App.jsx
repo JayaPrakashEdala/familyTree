@@ -717,6 +717,36 @@ const handleLogin = async (userData) => {
 
 
 function ProfileScreen({ user, setUser, onLogout, onAddRelations, onViewTree, onDeleteRelation, relations }) {
+  const [profileError, setProfileError] = useState("");
+  const [profileSuccess, setProfileSuccess] = useState("");
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  const handleSaveProfile = async () => {
+    try {
+      setProfileError("");
+      setProfileSuccess("");
+      setProfileLoading(true);
+
+      // Call backend to update user profile
+      const updatedUser = await userAPI.update(user.userId, {
+        firstName: user.firstName,
+        middleName: user.middleName,
+        lastName: user.lastName,
+        dob: user.dob
+      });
+
+      // Update local state with response
+      setUser(u => ({ ...u, ...updatedUser }));
+      setProfileSuccess("Profile saved successfully! ✓");
+      setTimeout(() => setProfileSuccess(""), 2000);
+    } catch (err) {
+      console.error("Profile update error:", err);
+      setProfileError("Failed to save profile: " + err.message);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   return (
     <>
       <div className="topbar">
@@ -784,6 +814,27 @@ function ProfileScreen({ user, setUser, onLogout, onAddRelations, onViewTree, on
             onChange={(e) => setUser(u => ({ ...u, dob: e.target.value }))}
           />
         </div>
+
+        {profileError && (
+          <div style={{ color: theme.danger, fontSize: 11, marginBottom: 12 }}>
+            ⚠ {profileError}
+          </div>
+        )}
+
+        {profileSuccess && (
+          <div style={{ color: theme.accent, fontSize: 11, marginBottom: 12 }}>
+            ✓ {profileSuccess}
+          </div>
+        )}
+
+        <button 
+          className="btn-primary" 
+          onClick={handleSaveProfile}
+          disabled={profileLoading}
+          style={{ marginBottom: 20, opacity: profileLoading ? 0.6 : 1 }}
+        >
+          {profileLoading ? "Saving..." : "Save Profile"}
+        </button>
 
         <div className="divider" />
 
