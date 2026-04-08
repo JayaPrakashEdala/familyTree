@@ -25,32 +25,33 @@ def user_to_dict(item):
 
 @router.post("/", response_model=SuccessResponse)
 async def create_user(user: UserCreate):
-    """Create a new user profile or return existing user if already exists"""
+    """Create a new user profile or return existing user if already exists (by Google Sub)"""
     try:
-        # Normalize email (lowercase, trim whitespace)
-        normalized_email = user.email.lower().strip()
+        # Use Google's unique subject identifier for lookup (not email)
+        # This ensures users are identified by their Google account, not email
+        google_sub = user.googleSub
         
-        # Try to query by email using GSI if available
+        # Try to query by googleSub using GSI if available
         existing_user = None
         try:
             response = users_table.query(
-                IndexName="emailIndex",
-                KeyConditionExpression="email = :email",
-                ExpressionAttributeValues={":email": normalized_email}
+                IndexName="googleSubIndex",
+                KeyConditionExpression="googleSub = :sub",
+                ExpressionAttributeValues={":sub": google_sub}
             )
             if response.get("Items") and len(response["Items"]) > 0:
                 existing_user = response["Items"][0]
-                print(f"✓ User found via GSI: {existing_user.get('userId')} - {normalized_email}")
+                print(f"✓ User found via GSI (googleSub): {existing_user.get('userId')}")
         except ClientError as e:
             # GSI doesn't exist yet, fall back to scan
             print(f"GSI not available, falling back to scan: {e}")
             response = users_table.scan(
-                FilterExpression="attribute_exists(email) AND email = :email",
-                ExpressionAttributeValues={":email": normalized_email}
+                FilterExpression="attribute_exists(googleSub) AND googleSub = :sub",
+                ExpressionAttributeValues={":sub": google_sub}
             )
             if response.get("Items") and len(response["Items"]) > 0:
                 existing_user = response["Items"][0]
-                print(f"✓ User found via scan: {existing_user.get('userId')} - {normalized_email}")
+                print(f"✓ User found via scan (googleSub): {existing_user.get('userId')}")
         
         # If user exists, return existing user
         if existing_user:
@@ -66,7 +67,8 @@ async def create_user(user: UserCreate):
         
         user_item = {
             "userId": user_id,
-            "email": normalized_email,
+            "googleSub": google_sub,
+            "email": user.email.lower().strip(),
             "firstName": user.firstName,
             "middleName": user.middleName or "",
             "lastName": user.lastName,
@@ -77,7 +79,7 @@ async def create_user(user: UserCreate):
         }
         
         users_table.put_item(Item=user_item)
-        print(f"✓ New user created: {user_id} - {normalized_email}")
+        print(f"✓ New user created: {user_id} (googleSub: {google_sub})")
         
         return SuccessResponse(
             success=True,

@@ -11,6 +11,7 @@ class UserProfile(BaseModel):
     email: EmailStr
     dob: Optional[str] = None
     avatar: Optional[str] = None
+    googleSub: str  # Google's unique subject identifier
 
 class User(UserProfile):
     userId: str

@@ -63,27 +63,17 @@ aws dynamodb create-table \
   --region us-east-1
 ```
 
-### Create Global Secondary Index (GSI) on Users Table Email
+### Create Global Secondary Index (GSI) on Users Table - Google Sub
 
-This index allows efficient lookups by email to prevent duplicate users:
+This index allows efficient lookups by Google's unique subject identifier (no email-based autofill):
 
 ```bash
 aws dynamodb update-table \
   --table-name family-tree-users \
   --attribute-definitions \
-    AttributeName=email,AttributeType=S \
+    AttributeName=googleSub,AttributeType=S \
   --global-secondary-indexes \
-    "[{\"IndexName\":\"emailIndex\",\"KeySchema\":[{\"AttributeName\":\"email\",\"KeyType\":\"HASH\"}],\"Projection\":{\"ProjectionType\":\"ALL\"},\"ProvisionedThroughput\":{\"ReadCapacityUnits\":5,\"WriteCapacityUnits\":5}}]" \
-  --region us-east-1
-```
-
-Or use this simpler approach with AWS CLI v2:
-
-```bash
-aws dynamodb update-table \
-  --table-name family-tree-users \
-  --attribute-definitions '{"email": {"S": ""}}' \
-  --global-secondary-indexes IndexName=emailIndex,KeySchema=[{AttributeName=email,KeyType=HASH}],Projection={ProjectionType=ALL},ProvisionedThroughput={ReadCapacityUnits=5,WriteCapacityUnits=5} \
+    "[{\"IndexName\":\"googleSubIndex\",\"KeySchema\":[{\"AttributeName\":\"googleSub\",\"KeyType\":\"HASH\"}],\"Projection\":{\"ProjectionType\":\"ALL\"},\"ProvisionedThroughput\":{\"ReadCapacityUnits\":5,\"WriteCapacityUnits\":5}}]" \
   --region us-east-1
 ```
 
@@ -92,8 +82,8 @@ Or create it manually in AWS Console:
 1. Go to DynamoDB → Tables → family-tree-users
 2. Click "Indexes" tab
 3. Click "Create Global Secondary Index"
-4. Partition Key: `email`
-5. Index name: `emailIndex`
+4. Partition Key: `googleSub`
+5. Index name: `googleSubIndex`
 6. Click Create
 
 ### Create Relations Table

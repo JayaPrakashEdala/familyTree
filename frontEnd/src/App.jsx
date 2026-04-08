@@ -507,6 +507,7 @@ function LoginScreen({ onLogin }) {
       email: decoded.email,
       avatar: decoded.picture,
       dob: "",
+      googleSub: decoded.sub,  // Google's unique subject identifier
     });
 
   } catch (err) {
@@ -562,14 +563,16 @@ const handleLogin = async (userData) => {
     setLoading(true);
     setError("");
     
-    // Create or get user from backend
+    // Create or get user from backend using Google sub as unique identifier
+    // This prevents email-based autofill and uses Google's unique user ID
     const createdUser = await userAPI.create(userData);
     
-    // Update user state with backend response including userId
-    setUser({
-      ...userData,
-      userId: createdUser.userId,
-    });
+    // IMPORTANT: Fetch the full user profile from backend (not Google data)
+    // This ensures saved changes (name, dob, etc.) are loaded correctly
+    const fullUserProfile = await userAPI.get(createdUser.userId);
+    
+    // Update user state with BACKEND data, not Google OAuth data
+    setUser(fullUserProfile);
     
     // Load user's relations from backend
     const userRelations = await relationsAPI.getAll(createdUser.userId);
