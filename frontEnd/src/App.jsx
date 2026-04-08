@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { jwtDecode } from "jwt-decode";
+import { userAPI, relationsAPI } from "./apiService";
 const theme = {
   bg: "#0D0F14",
   surface: "#161A23",
@@ -538,8 +539,11 @@ export default function App() {
   lastName: "",
   dob: "",
   email: "",
+  userId: "",
 });
   const [relations, setRelations] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [newRel, setNewRel] = useState({
   email: "",
   firstName: "",
@@ -553,16 +557,45 @@ export default function App() {
   const [addError, setAddError] = useState("");
   const [addSuccess, setAddSuccess] = useState("");
 
-const handleLogin = (userData) => {
-  setUser(userData);
-  setScreen("profile");
+const handleLogin = async (userData) => {
+  try {
+    setLoading(true);
+    setError("");
+    
+    // Create or get user from backend
+    const createdUser = await userAPI.create(userData);
+    
+    // Update user state with backend response including userId
+    setUser({
+      ...userData,
+      userId: createdUser.userId,
+    });
+    
+    // Load user's relations from backend
+    const userRelations = await relationsAPI.getAll(createdUser.userId);
+    setRelations(userRelations);
+    
+    setScreen("profile");
+  } catch (err) {
+    console.error("Login error:", err);
+    setError("Failed to login. Please check backend connection.");
+  } finally {
+    setLoading(false);
+  }
 };  const handleLogout = () => setScreen("login");
 
-  const handleDeleteRelation = (id) => {
-    setRelations(r => r.filter(rel => rel.id !== id));
+  const handleDeleteRelation = async (relationId) => {
+    try {
+      setError("");
+      await relationsAPI.delete(user.userId, relationId);
+      setRelations(r => r.filter(rel => rel.relationId !== relationId));
+    } catch (err) {
+      console.error("Delete error:", err);
+      setError("Failed to delete relation");
+    }
   };
 
-  const handleAddRelation = () => {
+  const handleAddRelation = async () => {
   if (!newRel.firstName.trim()) {
     setAddError("First name is required");
     return;
@@ -597,32 +630,45 @@ const handleLogin = (userData) => {
     }
   }
 
-  const fullName = `${newRel.firstName} ${newRel.middleName} ${newRel.lastName}`.trim();
+  try {
+    setAddError("");
+    const fullName = `${newRel.firstName} ${newRel.middleName} ${newRel.lastName}`.trim();
 
-  setRelations(r => [
-    ...r,
-    {
-      ...newRel,
-      name: fullName,   // ✅ ADD THIS
-      id: Date.now()
-    }
-  ]);
+    // Call backend API to add relation
+    const newRelation = await relationsAPI.add(user.userId, {
+      name: fullName,
+      firstName: newRel.firstName,
+      middleName: newRel.middleName,
+      lastName: newRel.lastName,
+      email: newRel.email,
+      type: newRel.type,
+      linkedParent: newRel.linkedParent
+    });
 
-  setNewRel({
-    email: "",
-    firstName: "",
-    middleName: "",
-    lastName: "",
-    type: "Father",
-    linkedParent: "",
-    status: "current",
-    notes: ""
-  });
+    // Add the response from backend to relations
+    setRelations(r => [
+      ...r,
+      newRelation
+    ]);
 
-  setAddError("");
-  setAddSuccess("Relation added successfully! ✓");
-  setTimeout(() => setAddSuccess(""), 2000);
-  setScreen("profile");
+    setNewRel({
+      email: "",
+      firstName: "",
+      middleName: "",
+      lastName: "",
+      type: "Father",
+      linkedParent: "",
+      status: "current",
+      notes: ""
+    });
+
+    setAddSuccess("Relation added successfully! ✓");
+    setTimeout(() => setAddSuccess(""), 2000);
+    setScreen("profile");
+  } catch (err) {
+    console.error("Add relation error:", err);
+    setAddError("Failed to add relation: " + err.message);
+  }
 };
   return (
     <>
@@ -750,7 +796,7 @@ function ProfileScreen({ user, setUser, onLogout, onAddRelations, onViewTree, on
           )}
 
           {relations.map(r => (
-            <div key={r.id} className="relation-chip" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div key={r.relationId} className="relation-chip" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ flex: 1 }}>
                 <div className="relation-chip-name">{r.name || `${r.firstName} ${r.lastName}`}</div>
                 <div className="relation-chip-type">
@@ -761,7 +807,7 @@ function ProfileScreen({ user, setUser, onLogout, onAddRelations, onViewTree, on
               <span className="badge">{r.type}</span>
               <button
                 className="btn-danger"
-                onClick={() => onDeleteRelation(r.id)}
+                onClick={() => onDeleteRelation(r.relationId)}
                 style={{ marginLeft: 10, padding: "6px 10px", fontSize: 10 }}
               >
                 ✕ Remove
@@ -972,7 +1018,7 @@ function TreeScreen({ user, relations, onBack }) {
   parents.forEach((parent, i) => {
     const x = centerX - 150 + i * 300;
     const y = 150;
-    const id = `rel-${parent.id}`;
+    const id = `rel-${parent.relationId}`;
     nodes.push({ id, label: parent.name ? parent.name.split(" ")[0] : parent.firstName, avatar: "👤", x, y, relation: parent.type, generation: 2 });
   });
 
@@ -980,7 +1026,7 @@ function TreeScreen({ user, relations, onBack }) {
   siblings.forEach((sibling, i) => {
     const x = centerX + (i === 0 ? 200 : -200);
     const y = centerY;
-    const id = `rel-${sibling.id}`;
+    const id = `rel-${sibling.relationId}`;
     nodes.push({ id, label: sibling.name ? sibling.name.split(" ")[0] : sibling.firstName, avatar: "👤", x, y, relation: sibling.type, generation: 2.5 });
   });
 
@@ -988,7 +1034,7 @@ function TreeScreen({ user, relations, onBack }) {
   spouses.forEach((spouse, i) => {
     const x = centerX + (i === 0 ? 150 : -150);
     const y = centerY - 50;
-    const id = `rel-${spouse.id}`;
+    const id = `rel-${spouse.relationId}`;
     nodes.push({ id, label: spouse.name ? spouse.name.split(" ")[0] : spouse.firstName, avatar: "👤", x, y, relation: spouse.type, generation: 2.75 });
   });
 
@@ -998,13 +1044,13 @@ function TreeScreen({ user, relations, onBack }) {
     const startX = centerX - ((children.length - 1) * spacing / 2);
     const x = startX + i * spacing;
     const y = 450;
-    const id = `rel-${child.id}`;
+    const id = `rel-${child.relationId}`;
     nodes.push({ id, label: child.name ? child.name.split(" ")[0] : child.firstName, avatar: "👤", x, y, relation: child.type, generation: 4 });
   });
 
   // Build edges based on relationship type
   relations.forEach((rel) => {
-    const id = `rel-${rel.id}`;
+    const id = `rel-${rel.relationId}`;
     const parentTypes = ["Father", "Mother"];
     const childTypes = ["Son", "Daughter"];
     const siblingTypes = ["Brother", "Sister"];
@@ -1023,7 +1069,7 @@ function TreeScreen({ user, relations, onBack }) {
       // Children connect from spouse or user
       const spouse = relations.find(r => r.type === "Spouse");
       if (spouse) {
-        edges.push({ from: `rel-${spouse.id}`, to: id });
+        edges.push({ from: `rel-${spouse.relationId}`, to: id });
       } else {
         edges.push({ from: "self", to: id });
       }

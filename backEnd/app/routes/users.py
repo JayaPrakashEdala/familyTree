@@ -25,14 +25,48 @@ def user_to_dict(item):
 
 @router.post("/", response_model=SuccessResponse)
 async def create_user(user: UserCreate):
-    """Create a new user profile"""
+    """Create a new user profile or return existing user if already exists"""
     try:
+        # Normalize email (lowercase, trim whitespace)
+        normalized_email = user.email.lower().strip()
+        
+        # Try to query by email using GSI if available
+        existing_user = None
+        try:
+            response = users_table.query(
+                IndexName="emailIndex",
+                KeyConditionExpression="email = :email",
+                ExpressionAttributeValues={":email": normalized_email}
+            )
+            if response.get("Items") and len(response["Items"]) > 0:
+                existing_user = response["Items"][0]
+                print(f"✓ User found via GSI: {existing_user.get('userId')} - {normalized_email}")
+        except ClientError as e:
+            # GSI doesn't exist yet, fall back to scan
+            print(f"GSI not available, falling back to scan: {e}")
+            response = users_table.scan(
+                FilterExpression="attribute_exists(email) AND email = :email",
+                ExpressionAttributeValues={":email": normalized_email}
+            )
+            if response.get("Items") and len(response["Items"]) > 0:
+                existing_user = response["Items"][0]
+                print(f"✓ User found via scan: {existing_user.get('userId')} - {normalized_email}")
+        
+        # If user exists, return existing user
+        if existing_user:
+            return SuccessResponse(
+                success=True,
+                message="User already exists",
+                data=user_to_dict(existing_user)
+            )
+        
+        # Create new user
         user_id = str(uuid.uuid4())
         now = datetime.utcnow().isoformat()
         
         user_item = {
             "userId": user_id,
-            "email": user.email,
+            "email": normalized_email,
             "firstName": user.firstName,
             "middleName": user.middleName or "",
             "lastName": user.lastName,
@@ -43,6 +77,7 @@ async def create_user(user: UserCreate):
         }
         
         users_table.put_item(Item=user_item)
+        print(f"✓ New user created: {user_id} - {normalized_email}")
         
         return SuccessResponse(
             success=True,

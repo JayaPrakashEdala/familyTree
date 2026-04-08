@@ -33,7 +33,7 @@ class RelationCreate(BaseModel):
     firstName: str
     middleName: Optional[str] = None
     lastName: str
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     type: str  # Father, Mother, Spouse, Son, Daughter, Brother, Sister
     linkedParent: Optional[str] = None
 
@@ -48,7 +48,7 @@ class RelationUpdate(BaseModel):
     firstName: Optional[str] = None
     middleName: Optional[str] = None
     lastName: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     type: Optional[str] = None
 
 # Response Models
